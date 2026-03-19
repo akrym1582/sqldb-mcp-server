@@ -6,6 +6,7 @@ import { createDBAdapter } from "../db";
 import { registerQueryTool } from "./tools/query";
 import { registerListTablesTool } from "./tools/listTables";
 import { registerDescribeTableTool } from "./tools/describeTable";
+import { registerExplainQueryTool } from "./tools/explainQuery";
 
 async function main(): Promise<void> {
   const db = createDBAdapter();
@@ -18,6 +19,7 @@ async function main(): Promise<void> {
   registerQueryTool(server, db);
   registerListTablesTool(server, db);
   registerDescribeTableTool(server, db);
+  registerExplainQueryTool(server, db);
 
   const transport = new StdioServerTransport();
 

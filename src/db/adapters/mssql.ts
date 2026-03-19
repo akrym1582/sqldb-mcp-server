@@ -1,5 +1,5 @@
 import sql from "mssql";
-import { DBAdapter, QueryResult, TableInfo, TableDescription, ColumnDetail, IndexInfo, ForeignKeyInfo, ConstraintInfo } from "../types";
+import { DBAdapter, QueryResult, TableInfo, TableDescription, ColumnDetail, IndexInfo, ForeignKeyInfo, ConstraintInfo, ExplainResult, ExplainRow } from "../types";
 
 const DEFAULT_QUERY_TIMEOUT = 30_000;
 
@@ -72,6 +72,58 @@ export class MSSQLAdapter implements DBAdapter {
     });
 
     return { rows: cleanRows, totalCount };
+  }
+
+  async explainQuery(sqlText: string): Promise<ExplainResult> {
+    await this.connect();
+
+    // Use a transaction to hold one connection so that the session-level
+    // SET SHOWPLAN_ALL ON setting applies to all three batches.
+    // When SHOWPLAN_ALL is ON, queries return plan rows instead of executing.
+    const transaction = new sql.Transaction(this.pool);
+    await transaction.begin();
+
+    try {
+      await new sql.Request(transaction).batch("SET SHOWPLAN_ALL ON");
+      const planResult = await new sql.Request(transaction).query(sqlText);
+      await new sql.Request(transaction).batch("SET SHOWPLAN_ALL OFF");
+
+      // Rollback releases the connection without any side-effects (no data
+      // changes occur because SHOWPLAN_ALL prevents actual execution).
+      await transaction.rollback();
+
+      const planRows = planResult.recordset as Record<string, unknown>[];
+
+      const plan: ExplainRow[] = planRows.map((row) => ({
+        stmtText: String(row["StmtText"] ?? ""),
+        stmtId: row["StmtId"] != null ? Number(row["StmtId"]) : undefined,
+        nodeId: row["NodeId"] != null ? Number(row["NodeId"]) : undefined,
+        parent: row["Parent"] != null ? Number(row["Parent"]) : undefined,
+        physicalOp: row["PhysicalOp"] != null ? String(row["PhysicalOp"]) : undefined,
+        logicalOp: row["LogicalOp"] != null ? String(row["LogicalOp"]) : undefined,
+        argument: row["Argument"] != null ? String(row["Argument"]) : undefined,
+        definedValues: row["DefinedValues"] != null ? String(row["DefinedValues"]) : undefined,
+        estimateRows: row["EstimateRows"] != null ? Number(row["EstimateRows"]) : undefined,
+        estimateIO: row["EstimateIO"] != null ? Number(row["EstimateIO"]) : undefined,
+        estimateCPU: row["EstimateCPU"] != null ? Number(row["EstimateCPU"]) : undefined,
+        avgRowSize: row["AvgRowSize"] != null ? Number(row["AvgRowSize"]) : undefined,
+        totalSubtreeCost: row["TotalSubtreeCost"] != null ? Number(row["TotalSubtreeCost"]) : undefined,
+        outputList: row["OutputList"] != null ? String(row["OutputList"]) : undefined,
+        warnings: row["Warnings"] != null ? String(row["Warnings"]) : undefined,
+        type: row["Type"] != null ? String(row["Type"]) : undefined,
+        parallel: row["Parallel"] != null ? Number(row["Parallel"]) !== 0 : undefined,
+        estimateExecutions: row["EstimateExecutions"] != null ? Number(row["EstimateExecutions"]) : undefined,
+      }));
+
+      return { sql: sqlText, plan };
+    } catch (err) {
+      try {
+        await transaction.rollback();
+      } catch {
+        // Ignore secondary rollback errors
+      }
+      throw err;
+    }
   }
 
   async listTables(): Promise<TableInfo[]> {
