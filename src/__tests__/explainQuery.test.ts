@@ -1,9 +1,10 @@
-import { DBAdapter, ExplainResult, QueryResult, TableDescription, TableInfo } from "../db/types";
+import { DBAdapter, QueryResult, TableDescription, TableInfo } from "../db/types";
 import { registerExplainQueryTool } from "../mcp/tools/explainQuery";
 
 // Minimal DBAdapter stub
 function makeAdapter(
-  explainFn: (sql: string) => Promise<ExplainResult>
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  explainFn: (sql: string) => Promise<any>
 ): DBAdapter {
   // eslint-disable-next-line require-yield
   async function* noopStream(): AsyncGenerator<Record<string, unknown>> { return; }
@@ -42,18 +43,19 @@ function captureHandler(db: DBAdapter): Handler {
 }
 
 describe("explainQuery tool", () => {
-  const samplePlan: ExplainResult = {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const samplePlan: any = {
     sql: "SELECT * FROM users",
     plan: [
       {
-        stmtText: "SELECT * FROM users",
-        stmtId: 1,
-        nodeId: 1,
-        parent: 0,
-        physicalOp: "Clustered Index Scan",
-        logicalOp: "Clustered Index Scan",
-        estimateRows: 100,
-        totalSubtreeCost: 0.02,
+        StmtText: "SELECT * FROM users",
+        StmtId: 1,
+        NodeId: 1,
+        Parent: 0,
+        PhysicalOp: "Clustered Index Scan",
+        LogicalOp: "Clustered Index Scan",
+        EstimateRows: 100,
+        TotalSubtreeCost: 0.02,
       },
     ],
   };
@@ -66,9 +68,13 @@ describe("explainQuery tool", () => {
 
     expect(result.content).toHaveLength(1);
     expect(result.content[0].type).toBe("text");
-    const parsed = JSON.parse(result.content[0].text) as ExplainResult;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const parsed = JSON.parse(result.content[0].text) as any;
     expect(parsed.plan).toHaveLength(1);
-    expect(parsed.plan[0].physicalOp).toBe("Clustered Index Scan");
+    expect(parsed.plan[0].PhysicalOp).toBe("Clustered Index Scan");
+    expect(parsed.plan[0].StmtText).toBe("SELECT * FROM users");
+    expect(parsed.plan[0].EstimateRows).toBe(100);
+    expect(parsed.plan[0].TotalSubtreeCost).toBe(0.02);
   });
 
   it("caches repeated calls for the same SQL", async () => {
