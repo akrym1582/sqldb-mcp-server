@@ -27,7 +27,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/akryk7316/sqldb-mcp-server.git"
+    "url": "git+https://github.com/akrym1582/sqldb-mcp-server.git"
   },
   "keywords": [
     "mcp",
@@ -44,9 +44,9 @@
   "license": "MIT",
   "type": "commonjs",
   "bugs": {
-    "url": "https://github.com/akryk7316/sqldb-mcp-server/issues"
+    "url": "https://github.com/akrym1582/sqldb-mcp-server/issues"
   },
-  "homepage": "https://github.com/akryk7316/sqldb-mcp-server#readme",
+  "homepage": "https://github.com/akrym1582/sqldb-mcp-server#readme",
   "jest": {
     "preset": "ts-jest",
     "testEnvironment": "node",
