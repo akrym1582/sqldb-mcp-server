@@ -1,6 +1,6 @@
 {
-  "name": "@akryk7316/sqldb-mcp-server",
-  "version": "1.0.0",
+  "name": "@akrym1582/sqldb-mcp-server",
+  "version": "0.0.1",
   "description": "MCP server for SQL database access (MSSQL, PostgreSQL, MySQL)",
   "main": "dist/mcp/server.js",
   "bin": {
@@ -40,7 +40,7 @@
     "llm",
     "ai"
   ],
-  "author": "akryk7316",
+  "author": "akrym1582",
   "license": "MIT",
   "type": "commonjs",
   "bugs": {
