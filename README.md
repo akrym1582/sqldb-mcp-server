@@ -15,21 +15,47 @@ A **read-only** [Model Context Protocol (MCP)](https://modelcontextprotocol.io/)
 
 ## Quick Start
 
+No installation required – run directly with `npx`:
+
 ```bash
-# 1. Install dependencies
-npm install
+# 1. Create a .env file with your DB credentials
+cat > .env << 'EOF'
+DB_TYPE=postgresql
+DB_HOST=localhost
+DB_PORT=5432
+DB_USER=myuser
+DB_PASSWORD=mypassword
+DB_NAME=mydb
+EOF
 
-# 2. Configure environment
-cp .env.example .env
-# Edit .env with your DB credentials
-
-# 3. Run in dev mode
-npm run dev
-
-# 4. Or build and run
-npm run build
-npm start
+# 2. Start the MCP server
+npx sqldb-mcp-server
 ```
+
+### MCP client configuration
+
+Add the following to your MCP client's config file (e.g. Claude Desktop's `claude_desktop_config.json`):
+
+```json
+{
+  "mcpServers": {
+    "sqldb": {
+      "command": "npx",
+      "args": ["-y", "sqldb-mcp-server"],
+      "env": {
+        "DB_TYPE": "postgresql",
+        "DB_HOST": "localhost",
+        "DB_PORT": "5432",
+        "DB_USER": "myuser",
+        "DB_PASSWORD": "mypassword",
+        "DB_NAME": "mydb"
+      }
+    }
+  }
+}
+```
+
+> **Supported values for `DB_TYPE`:** `mssql`, `postgresql`, `mysql`
 
 ## Environment Variables
 
@@ -141,6 +167,28 @@ Response format:
 The tool uses a separate, longer-lived connection pool whose `requestTimeout` is controlled by `EXPORT_QUERY_TIMEOUT` (default 300 000 ms = 5 min).  Increase this value for very large exports.
 
 ## Development
+
+```bash
+# 1. Clone the repository
+git clone https://github.com/akryk7316/sqldb-mcp-server.git
+cd sqldb-mcp-server
+
+# 2. Install dependencies
+npm install
+
+# 3. Configure environment
+cp .env.example .env
+# Edit .env with your DB credentials
+
+# 4. Run in dev mode (no build step required)
+npm run dev
+
+# 5. Or build and run the compiled output
+npm run build
+npm start
+```
+
+Other useful commands:
 
 ```bash
 npm test        # Run unit tests
