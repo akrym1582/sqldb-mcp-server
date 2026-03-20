@@ -3,11 +3,24 @@
   "version": "1.0.0",
   "description": "MCP server for SQL database access (MSSQL, PostgreSQL, MySQL)",
   "main": "dist/mcp/server.js",
+  "bin": {
+    "sqldb-mcp-server": "dist/mcp/server.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    ".env.example"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
     "build": "tsc",
     "start": "node dist/mcp/server.js",
     "dev": "ts-node src/mcp/server.ts",
-    "test": "jest --forceExit"
+    "test": "jest --forceExit",
+    "prepublishOnly": "npm run build"
   },
   "repository": {
     "type": "git",
@@ -15,13 +28,17 @@
   },
   "keywords": [
     "mcp",
+    "model-context-protocol",
     "sql",
     "mssql",
+    "postgresql",
+    "mysql",
     "database",
-    "llm"
+    "llm",
+    "ai"
   ],
   "author": "",
-  "license": "ISC",
+  "license": "MIT",
   "type": "commonjs",
   "bugs": {
     "url": "https://github.com/akryk7316/sqldb-mcp-server/issues"
