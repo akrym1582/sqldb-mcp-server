@@ -19,16 +19,16 @@ A **read-only** [Model Context Protocol (MCP)](https://modelcontextprotocol.io/)
 
 ```bash
 # Install globally
-npm install -g @akryk7316/sqldb-mcp-server
+npm install -g @akrym1582/sqldb-mcp-server
 
 # Or run directly with npx (no install needed)
-npx @akryk7316/sqldb-mcp-server
+npx @akrym1582/sqldb-mcp-server
 ```
 
 ### From source
 
 ```bash
-git clone https://github.com/akryk7316/sqldb-mcp-server.git
+git clone https://github.com/akrym1582/sqldb-mcp-server.git
 cd sqldb-mcp-server
 npm install
 npm run build
@@ -38,7 +38,7 @@ npm run build
 
 ```bash
 # 1. Install globally
-npm install -g @akryk7316/sqldb-mcp-server
+npm install -g @akrym1582/sqldb-mcp-server
 
 # 2. Configure environment variables (see below)
 export DB_TYPE=postgresql
@@ -58,7 +58,7 @@ Or use in your MCP client configuration (e.g. Claude Desktop `claude_desktop_con
   "mcpServers": {
     "sqldb": {
       "command": "npx",
-      "args": ["-y", "@akryk7316/sqldb-mcp-server"],
+      "args": ["-y", "@akrym1582/sqldb-mcp-server"],
       "env": {
         "DB_TYPE": "postgresql",
         "DB_HOST": "localhost",
@@ -185,7 +185,7 @@ The tool uses a separate, longer-lived connection pool whose `requestTimeout` is
 
 ```bash
 # Clone the repository
-git clone https://github.com/akryk7316/sqldb-mcp-server.git
+git clone https://github.com/akrym1582/sqldb-mcp-server.git
 cd sqldb-mcp-server
 
 # Install dependencies
