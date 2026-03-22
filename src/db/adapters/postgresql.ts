@@ -11,6 +11,7 @@ import {
   ConstraintInfo,
   ExplainResult,
 } from "../types";
+import { shouldFallbackPostgreSQLSSL, shouldUseEncryptedConnection } from "./security";
 
 const DEFAULT_QUERY_TIMEOUT = 30_000;
 const DEFAULT_EXPORT_QUERY_TIMEOUT = 300_000;
@@ -20,14 +21,18 @@ export class PostgreSQLAdapter implements DBAdapter {
   private exportPool: Pool | null = null;
   private readonly queryTimeout: number;
   private readonly exportQueryTimeout: number;
+  private readonly preferSSL: boolean;
+  private primaryPoolFallbackPromise: Promise<Pool> | null = null;
+  private exportPoolFallbackPromise: Promise<Pool> | null = null;
 
   constructor() {
     this.queryTimeout = Number(process.env.DB_QUERY_TIMEOUT) || DEFAULT_QUERY_TIMEOUT;
     this.exportQueryTimeout = Number(process.env.EXPORT_QUERY_TIMEOUT) || DEFAULT_EXPORT_QUERY_TIMEOUT;
-    this.pool = this.createPool(this.queryTimeout);
+    this.preferSSL = shouldUseEncryptedConnection(true);
+    this.pool = this.createPool(this.queryTimeout, this.preferSSL);
   }
 
-  private createPool(timeoutMs: number): Pool {
+  private createPool(timeoutMs: number, useSSL: boolean): Pool {
     return new Pool({
       host: process.env.DB_HOST,
       port: Number(process.env.DB_PORT) || 5432,
@@ -38,14 +43,72 @@ export class PostgreSQLAdapter implements DBAdapter {
       query_timeout: timeoutMs,
       max: 10,
       idleTimeoutMillis: 30_000,
+      ssl: useSSL ? { rejectUnauthorized: false } : undefined,
     });
   }
 
   private getExportPool(): Pool {
     if (!this.exportPool) {
-      this.exportPool = this.createPool(this.exportQueryTimeout);
+      this.exportPool = this.createPool(this.exportQueryTimeout, this.preferSSL);
     }
     return this.exportPool;
+  }
+
+  private async fallbackToNonSSLPool(pool: Pool, timeoutMs: number): Promise<Pool> {
+    const isPrimaryPool = pool === this.pool;
+    const activeFallbackPromise = isPrimaryPool ? this.primaryPoolFallbackPromise : this.exportPoolFallbackPromise;
+    if (activeFallbackPromise) {
+      return activeFallbackPromise;
+    }
+
+    const fallbackPromise = (async () => {
+      const currentPool = isPrimaryPool ? this.pool : this.exportPool;
+      if (currentPool !== pool && currentPool) {
+        return currentPool;
+      }
+
+      await pool.end();
+      const fallbackPool = this.createPool(timeoutMs, false);
+      if (isPrimaryPool) {
+        this.pool = fallbackPool;
+      } else {
+        this.exportPool = fallbackPool;
+      }
+      return fallbackPool;
+    })();
+
+    if (isPrimaryPool) {
+      this.primaryPoolFallbackPromise = fallbackPromise;
+    } else {
+      this.exportPoolFallbackPromise = fallbackPromise;
+    }
+
+    try {
+      return await fallbackPromise;
+    } finally {
+      if (isPrimaryPool) {
+        this.primaryPoolFallbackPromise = null;
+      } else {
+        this.exportPoolFallbackPromise = null;
+      }
+    }
+  }
+
+  private async withPoolSSLFallback<T>(pool: Pool, timeoutMs: number, run: (targetPool: Pool) => Promise<T>): Promise<T> {
+    try {
+      return await run(pool);
+    } catch (err) {
+      if (!this.preferSSL || !shouldFallbackPostgreSQLSSL(err)) {
+        throw err;
+      }
+
+      const fallbackPool = await this.fallbackToNonSSLPool(pool, timeoutMs);
+      return run(fallbackPool);
+    }
+  }
+
+  private connectWithSSLFallback(pool: Pool, timeoutMs: number): Promise<PoolClient> {
+    return this.withPoolSSLFallback(pool, timeoutMs, (targetPool) => targetPool.connect());
   }
 
   async close(): Promise<void> {
@@ -65,7 +128,7 @@ export class PostgreSQLAdapter implements DBAdapter {
       LIMIT ${take} OFFSET ${skip}
     `;
 
-    const result = await this.pool.query(wrapped);
+    const result = await this.withPoolSSLFallback(this.pool, this.queryTimeout, (pool) => pool.query(wrapped));
     const rows = result.rows as Record<string, unknown>[];
     const totalCount = rows.length > 0 ? Number(rows[0]["__total_count"] ?? 0) : 0;
 
@@ -82,7 +145,7 @@ export class PostgreSQLAdapter implements DBAdapter {
       throw new Error("Export was cancelled before starting");
     }
 
-    const client: PoolClient = await this.getExportPool().connect();
+    const client: PoolClient = await this.connectWithSSLFallback(this.getExportPool(), this.exportQueryTimeout);
     const BATCH_SIZE = 1000;
 
     try {
@@ -120,13 +183,13 @@ export class PostgreSQLAdapter implements DBAdapter {
   }
 
   async listTables(): Promise<TableInfo[]> {
-    const result = await this.pool.query(`
+    const result = await this.withPoolSSLFallback(this.pool, this.queryTimeout, (pool) => pool.query(`
       SELECT table_schema AS "schema", table_name AS "name"
       FROM information_schema.tables
       WHERE table_type = 'BASE TABLE'
         AND table_schema NOT IN ('pg_catalog', 'information_schema')
       ORDER BY table_schema, table_name
-    `);
+    `));
 
     return result.rows.map((row: Record<string, unknown>) => ({
       schema: String(row["schema"]),
@@ -142,7 +205,7 @@ export class PostgreSQLAdapter implements DBAdapter {
     }
 
     // Columns
-    const columnsResult = await this.pool.query(
+    const columnsResult = await this.withPoolSSLFallback(this.pool, this.queryTimeout, (pool) => pool.query(
       `SELECT
         c.column_name AS name,
         c.data_type AS type,
@@ -167,7 +230,7 @@ export class PostgreSQLAdapter implements DBAdapter {
         AND c.table_name = $2
       ORDER BY c.ordinal_position`,
       [schema, table]
-    );
+    ));
 
     const columns: ColumnDetail[] = columnsResult.rows.map((c: Record<string, unknown>) => ({
       name: String(c["name"]),
@@ -182,7 +245,7 @@ export class PostgreSQLAdapter implements DBAdapter {
     }));
 
     // Indexes
-    const indexResult = await this.pool.query(
+    const indexResult = await this.withPoolSSLFallback(this.pool, this.queryTimeout, (pool) => pool.query(
       `SELECT
         i.relname AS index_name,
         ix.indisunique AS is_unique,
@@ -197,7 +260,7 @@ export class PostgreSQLAdapter implements DBAdapter {
       GROUP BY i.relname, ix.indisunique, ix.indisprimary
       ORDER BY i.relname`,
       [schema, table]
-    );
+    ));
 
     const indexes: IndexInfo[] = indexResult.rows.map((i: Record<string, unknown>) => ({
       name: String(i["index_name"]),
@@ -207,7 +270,7 @@ export class PostgreSQLAdapter implements DBAdapter {
     }));
 
     // Foreign keys
-    const fkResult = await this.pool.query(
+    const fkResult = await this.withPoolSSLFallback(this.pool, this.queryTimeout, (pool) => pool.query(
       `SELECT
         kcu.constraint_name AS fk_name,
         kcu.column_name,
@@ -225,7 +288,7 @@ export class PostgreSQLAdapter implements DBAdapter {
         AND tc.table_name = $2
       ORDER BY kcu.constraint_name`,
       [schema, table]
-    );
+    ));
 
     const foreignKeys: ForeignKeyInfo[] = fkResult.rows.map((fk: Record<string, unknown>) => ({
       name: String(fk["fk_name"]),
@@ -235,7 +298,7 @@ export class PostgreSQLAdapter implements DBAdapter {
     }));
 
     // Check constraints
-    const constraintResult = await this.pool.query(
+    const constraintResult = await this.withPoolSSLFallback(this.pool, this.queryTimeout, (pool) => pool.query(
       `SELECT
         cc.constraint_name,
         cc.check_clause
@@ -247,7 +310,7 @@ export class PostgreSQLAdapter implements DBAdapter {
         AND tc.table_name = $2
       ORDER BY cc.constraint_name`,
       [schema, table]
-    );
+    ));
 
     const constraints: ConstraintInfo[] = constraintResult.rows.map((c: Record<string, unknown>) => ({
       name: String(c["constraint_name"]),
@@ -256,7 +319,7 @@ export class PostgreSQLAdapter implements DBAdapter {
     }));
 
     // Row count and size
-    const sizeResult = await this.pool.query(
+    const sizeResult = await this.withPoolSSLFallback(this.pool, this.queryTimeout, (pool) => pool.query(
       `SELECT
         c.reltuples::bigint AS row_count,
         pg_table_size(c.oid) AS data_size_bytes,
@@ -266,7 +329,7 @@ export class PostgreSQLAdapter implements DBAdapter {
       INNER JOIN pg_namespace n ON n.oid = c.relnamespace
       WHERE n.nspname = $1 AND c.relname = $2`,
       [schema, table]
-    );
+    ));
 
     const sizeRow = sizeResult.rows[0] as Record<string, unknown> | undefined;
 
@@ -287,7 +350,11 @@ export class PostgreSQLAdapter implements DBAdapter {
   }
 
   async explainQuery(sqlText: string): Promise<ExplainResult> {
-    const result = await this.pool.query(`EXPLAIN (FORMAT JSON, ANALYZE FALSE) ${sqlText}`);
+    const result = await this.withPoolSSLFallback(
+      this.pool,
+      this.queryTimeout,
+      (pool) => pool.query(`EXPLAIN (FORMAT JSON, ANALYZE FALSE) ${sqlText}`)
+    );
     const planJson = (result.rows[0] as Record<string, unknown>)["QUERY PLAN"];
     return {
       sql: sqlText,
