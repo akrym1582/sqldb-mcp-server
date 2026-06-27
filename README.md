@@ -11,7 +11,8 @@ A **read-only** [Model Context Protocol (MCP)](https://modelcontextprotocol.io/)
 - **Total-count aware** – every query result includes `meta.totalCount` so the LLM knows how many rows exist
 - **Caching** – query / schema results are cached with a configurable TTL
 - **File export** – stream query results to CSV or JSON files without a row-count limit
-- **Five MCP tools**: `query`, `listTables`, `describeTable`, `explainQuery`, `exportQuery`
+- **Markdown evidence export** – save SQL and query results as a Markdown report file for test evidence
+- **Six MCP tools**: `query`, `listTables`, `describeTable`, `explainQuery`, `exportQuery`, `saveQueryEvidence`
 
 ## Installation
 
@@ -181,7 +182,32 @@ Response format:
 ```
 
 The tool uses a separate, longer-lived connection pool whose `requestTimeout` is controlled by `EXPORT_QUERY_TIMEOUT` (default 300 000 ms = 5 min).  Increase this value for very large exports.
-
+ 
+### `saveQueryEvidence`
+ 
+Execute a SELECT query and save the SQL plus the returned rows as a Markdown report file for test evidence.
+ 
+```json
+{
+  "sql": "SELECT id, name FROM users LIMIT 10",
+  "filepath": "/tmp/query-evidence.md"
+}
+```
+ 
+Response format:
+```json
+{
+  "filepath": "/tmp/query-evidence.md",
+  "rowCount": 10,
+  "previewRows": [
+    { "id": 1, "name": "Alice" },
+    { "id": 2, "name": "Bob" }
+  ]
+}
+```
+ 
+If an error occurs, the tool returns the error message text instead of a success payload.
+ 
 ## Development
 
 ```bash

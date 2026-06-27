@@ -9,6 +9,7 @@ import { registerListTablesTool } from "./tools/listTables";
 import { registerDescribeTableTool } from "./tools/describeTable";
 import { registerExplainQueryTool } from "./tools/explainQuery";
 import { registerExportQueryTool } from "./tools/exportQuery";
+import { registerSaveQueryEvidenceTool } from "./tools/saveQueryEvidence";
 import packageJson from "../../package.json";
 
 async function main(): Promise<void> {
@@ -24,6 +25,7 @@ async function main(): Promise<void> {
   registerDescribeTableTool(server, db);
   registerExplainQueryTool(server, db);
   registerExportQueryTool(server, db);
+  registerSaveQueryEvidenceTool(server, db);
 
   const transport = new StdioServerTransport();
 
