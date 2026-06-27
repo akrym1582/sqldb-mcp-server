@@ -19,7 +19,7 @@ jobs:
     # Using npm OIDC Trusted Publishing
     # Reference: https://docs.npmjs.com/trusted-publishers#github-actions-configuration
     permissions:
-      contents: read
+      contents: write
       id-token: write
     outputs:
       version: ${{ steps.version.outputs.version }}
@@ -83,9 +83,7 @@ jobs:
         run: npm run build
 
       - name: Publish to npm
-        run: npm publish --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --access public
 
   create-release:
     runs-on: ubuntu-latest
