@@ -12,7 +12,8 @@ A **read-only** [Model Context Protocol (MCP)](https://modelcontextprotocol.io/)
 - **Caching** – query / schema results are cached with a configurable TTL
 - **File export** – stream query results to CSV or JSON files without a row-count limit
 - **Markdown evidence export** – save SQL and query results as a Markdown report file for test evidence
-- **Six MCP tools**: `query`, `listTables`, `describeTable`, `explainQuery`, `exportQuery`, `saveQueryEvidence`
+- **Database selection** – allow exact database names and regular-expression matches, then select a database per tool call
+- **Seven MCP tools**: `listDatabases`, `query`, `listTables`, `describeTable`, `explainQuery`, `exportQuery`, `saveQueryEvidence`
 
 ## Installation
 
@@ -82,7 +83,8 @@ Or use in your MCP client configuration (e.g. Claude Desktop `claude_desktop_con
 | `DB_PORT` | `1433` / `5432` / `3306` | Database server port (default depends on `DB_TYPE`) |
 | `DB_USER` | – | Database username |
 | `DB_PASSWORD` | – | Database password |
-| `DB_NAME` | – | Database name |
+| `DB_NAME` | – | Allowed databases: comma-separated exact names and/or JavaScript regex literals (for example `app,analytics,/^tenant_[0-9]+$/`) |
+| `DB_DEFAULT` | first allowed database | Default database when a tool call omits `database`; it must be allowed by `DB_NAME` |
 | `DB_ENCRYPT` | `true` for MSSQL/PostgreSQL, `false` for MySQL | Enables encrypted DB connections. MSSQL trusts the server certificate. PostgreSQL tries SSL first and falls back to plain if SSL is unavailable. MySQL uses TLS with certificate verification disabled when enabled. |
 | `DB_QUERY_TIMEOUT` | `30000` | Query timeout in milliseconds (used by `query` / `explainQuery`) |
 | `EXPORT_QUERY_TIMEOUT` | `300000` | Export query timeout in milliseconds (used by `exportQuery`; default 5 min) |
@@ -98,6 +100,21 @@ Or use in your MCP client configuration (e.g. Claude Desktop `claude_desktop_con
 
 ## MCP Tools
 
+Every database-aware tool accepts an optional `database` string. If omitted, `DB_DEFAULT` is used, or otherwise the first exact/matched database in `DB_NAME`. A requested database must match the configured allow-list; arbitrary database access is rejected.
+
+Regular-expression entries are resolved against databases visible to the configured user. When using regex-only PostgreSQL configuration, ensure the user has a connectable maintenance database (normally the database with the same name as the user); MSSQL and MySQL can enumerate databases without selecting one.
+
+### `listDatabases`
+
+List the databases available to the MCP tools and identify the current default:
+
+```json
+[
+  { "name": "app", "isDefault": true },
+  { "name": "tenant_42", "isDefault": false }
+]
+```
+
 ### `query`
 
 Execute a `SELECT` SQL statement.
@@ -105,6 +122,7 @@ Execute a `SELECT` SQL statement.
 ```json
 {
   "sql": "SELECT id, name FROM users WHERE active = 1",
+  "database": "app",
   "skip": 0,
   "take": 10
 }
@@ -121,7 +139,7 @@ Response format (compact / token-efficient):
 
 ### `listTables`
 
-List all base tables in the database.
+List all base tables in a selected database. Pass `{ "database": "app" }`, or omit it to use the default.
 
 ```json
 [{ "schema": "dbo", "name": "users" }, ...]
@@ -132,7 +150,7 @@ List all base tables in the database.
 Describe a table's columns, indexes, foreign keys, check constraints, and size statistics.
 
 ```json
-{ "table": "dbo.users" }
+{ "database": "app", "table": "dbo.users" }
 ```
 
 ### `explainQuery`
@@ -140,7 +158,7 @@ Describe a table's columns, indexes, foreign keys, check constraints, and size s
 Return the estimated execution plan for a SELECT query without executing it.
 
 ```json
-{ "sql": "SELECT * FROM orders WHERE status = 'open'" }
+{ "database": "app", "sql": "SELECT * FROM orders WHERE status = 'open'" }
 ```
 
 ### `exportQuery`
@@ -150,6 +168,7 @@ Stream a SELECT query result to a file.  Designed for large datasets – there i
 ```json
 {
   "sql": "SELECT * FROM large_table",
+  "database": "analytics",
   "filepath": "/tmp/export.csv",
   "format": "csv",
   "options": { "delimiter": ",", "bom": false }
@@ -190,6 +209,7 @@ Execute a SELECT query and save the SQL plus the returned rows as a Markdown rep
 ```json
 {
   "sql": "SELECT id, name FROM users LIMIT 10",
+  "database": "app",
   "filepath": "/tmp/query-evidence.md"
 }
 ```

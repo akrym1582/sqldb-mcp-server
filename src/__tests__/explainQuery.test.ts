@@ -11,6 +11,7 @@ function makeAdapter(
   return {
     query: async (): Promise<QueryResult> => ({ rows: [], totalCount: 0 }),
     queryStream: noopStream,
+    listDatabases: async (): Promise<string[]> => [],
     listTables: async (): Promise<TableInfo[]> => [],
     describeTable: async (): Promise<TableDescription> => ({
       table: { name: "t", schema: "dbo", rowCount: 0, dataSizeBytes: 0, indexSizeBytes: 0, totalSizeBytes: 0 },

@@ -1,7 +1,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import { z } from "zod";
-import { DBAdapter } from "../../db/types";
+import { DatabaseTarget, resolveDatabase } from "./database";
 import { validateSQL } from "../../utils/sanitize";
 
 const DEFAULT_EXPORT_TIMEOUT_MS = 300_000; // 5 minutes
@@ -12,11 +12,13 @@ export const saveQueryEvidenceInputSchema = {
     .string()
     .min(1)
     .describe("Destination Markdown file path (absolute, or relative to the server working directory)"),
+  database: z.string().min(1).optional().describe("Database to query; omit to use the default"),
 };
 
 type SaveQueryEvidenceArgs = {
   sql: string;
   filepath: string;
+  database?: string;
 };
 
 function formatMarkdownValue(value: unknown): string {
@@ -64,7 +66,7 @@ export function registerSaveQueryEvidenceTool(
       }>
     ) => void;
   },
-  db: DBAdapter
+  databases: DatabaseTarget
 ): void {
   server.registerTool(
     "saveQueryEvidence",
@@ -74,7 +76,7 @@ export function registerSaveQueryEvidenceTool(
         "Returns the saved file path, the total number of rows fetched, and the first 10 rows as preview data.",
       inputSchema: saveQueryEvidenceInputSchema,
     },
-    async ({ sql, filepath }) => {
+    async ({ sql, filepath, database }) => {
       let controller: AbortController | null = null;
       let exportTimeout = DEFAULT_EXPORT_TIMEOUT_MS;
       let timeoutId: NodeJS.Timeout | null = null;
@@ -84,6 +86,7 @@ export function registerSaveQueryEvidenceTool(
 
       try {
         validateSQL(sql);
+        const db = await resolveDatabase(databases, database);
 
         controller = new AbortController();
         exportTimeout = Number(process.env.EXPORT_QUERY_TIMEOUT) || DEFAULT_EXPORT_TIMEOUT_MS;

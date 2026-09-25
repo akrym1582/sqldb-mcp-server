@@ -25,7 +25,7 @@ export class PostgreSQLAdapter implements DBAdapter {
   private primaryPoolFallbackPromise: Promise<Pool> | null = null;
   private exportPoolFallbackPromise: Promise<Pool> | null = null;
 
-  constructor() {
+  constructor(private readonly databaseName?: string) {
     this.queryTimeout = Number(process.env.DB_QUERY_TIMEOUT) || DEFAULT_QUERY_TIMEOUT;
     this.exportQueryTimeout = Number(process.env.EXPORT_QUERY_TIMEOUT) || DEFAULT_EXPORT_QUERY_TIMEOUT;
     this.preferSSL = shouldUseEncryptedConnection(true);
@@ -38,13 +38,20 @@ export class PostgreSQLAdapter implements DBAdapter {
       port: Number(process.env.DB_PORT) || 5432,
       user: process.env.DB_USER,
       password: process.env.DB_PASSWORD,
-      database: process.env.DB_NAME,
+      database: this.databaseName,
       connectionTimeoutMillis: timeoutMs,
       query_timeout: timeoutMs,
       max: 10,
       idleTimeoutMillis: 30_000,
       ssl: useSSL ? { rejectUnauthorized: false } : undefined,
     });
+  }
+
+  async listDatabases(): Promise<string[]> {
+    const result = await this.withPoolSSLFallback(this.pool, this.queryTimeout, (pool) =>
+      pool.query("SELECT datname AS name FROM pg_database WHERE datallowconn AND NOT datistemplate ORDER BY datname")
+    );
+    return result.rows.map((row: { name: string }) => row.name);
   }
 
   private getExportPool(): Pool {

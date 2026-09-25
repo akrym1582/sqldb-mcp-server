@@ -1,25 +1,29 @@
-import { DBAdapter, TableInfo } from "../../db/types";
+import { TableInfo } from "../../db/types";
+import { DatabaseTarget, resolveDatabase } from "./database";
+import { z } from "zod";
 import { TTLCache, getCacheTTL } from "../../utils/cache";
 
 const listTablesCache = new TTLCache<TableInfo[]>(getCacheTTL());
-const CACHE_KEY = "listTables";
+const listTablesInputSchema = { database: z.string().min(1).optional().describe("Database to inspect; omit to use the default") };
 
 export function registerListTablesTool(server: {
   registerTool: (
     name: string,
-    config: { description?: string; inputSchema: Record<string, never> },
-    handler: (args: Record<string, never>) => Promise<{
+    config: { description?: string; inputSchema: typeof listTablesInputSchema },
+    handler: (args: { database?: string }) => Promise<{
       content: Array<{ type: "text"; text: string }>;
     }>
   ) => void;
-}, db: DBAdapter): void {
+}, databases: DatabaseTarget): void {
   server.registerTool(
     "listTables",
     {
       description: "List all base tables in the database, returning their schema and name.",
-      inputSchema: {},
+      inputSchema: listTablesInputSchema,
     },
-    async (_args) => {
+    async ({ database }) => {
+      const db = await resolveDatabase(databases, database);
+      const CACHE_KEY = `listTables:${database ?? "@default"}`;
       const cached = listTablesCache.get(CACHE_KEY);
       if (cached) {
         return { content: [{ type: "text", text: JSON.stringify(cached) }] };
