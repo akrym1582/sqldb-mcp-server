@@ -51,7 +51,7 @@ export class DatabaseRegistry implements DBProvider {
 
   private async allowedNames(): Promise<string[]> {
     if (!this.discoveredNames) {
-      this.discoveredNames = (async () => {
+      const discoveryPromise = (async () => {
         if (this.selectors.patterns.length === 0) return this.selectors.exact;
         // With a regex-only selector, connect without a database so the server can enumerate catalogs.
         const discovery = adapterFor(this.selectors.exact[0]);
@@ -68,6 +68,12 @@ export class DatabaseRegistry implements DBProvider {
           await discovery.close();
         }
       })();
+      this.discoveredNames = discoveryPromise.catch((error) => {
+        // Discovery can fail transiently while connecting, listing catalogs, or
+        // closing its adapter. Do not leave that rejected promise cached forever.
+        this.discoveredNames = null;
+        throw error;
+      });
     }
     return this.discoveredNames;
   }
