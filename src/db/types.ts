@@ -84,7 +84,7 @@ export interface ExplainResult {
 }
 
 export interface DBAdapter {
-  query(sql: string, skip: number, take: number): Promise<QueryResult>;
+  query(sql: string, skip?: number, take?: number): Promise<QueryResult>;
   /**
    * Stream all matching rows without a hard row-count limit.
    * Intended for large exports; uses a longer timeout pool internally.

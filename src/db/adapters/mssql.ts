@@ -63,7 +63,7 @@ export class MSSQLAdapter implements DBAdapter {
     }
   }
 
-  async query(sqlText: string, skip: number, take: number): Promise<QueryResult> {
+  async query(sqlText: string, skip?: number, take?: number): Promise<QueryResult> {
     await this.connect();
 
     // Security note: sqlText has been validated by validateSQL() (AST-level check) before reaching
@@ -71,18 +71,20 @@ export class MSSQLAdapter implements DBAdapter {
     // subquery because parameterised queries do not support dynamic SQL fragments.  The adaptor is
     // intentionally read-only (no INSERT/UPDATE/DELETE/DDL) and should only be exposed to trusted
     // query sources.
+    const paginationClause = skip === undefined || take === undefined
+      ? ""
+      : "ORDER BY (SELECT NULL) OFFSET @skip ROWS FETCH NEXT @take ROWS ONLY";
     const wrapped = `
       SELECT *, COUNT(*) OVER() AS __total_count
       FROM (${sqlText}) AS __inner_query
-      ORDER BY (SELECT NULL)
-      OFFSET @skip ROWS FETCH NEXT @take ROWS ONLY
+      ${paginationClause}
     `;
 
-    const result = await this.pool
-      .request()
-      .input("skip", sql.Int, skip)
-      .input("take", sql.Int, take)
-      .query(wrapped);
+    const request = this.pool.request();
+    if (paginationClause) {
+      request.input("skip", sql.Int, skip).input("take", sql.Int, take);
+    }
+    const result = await request.query(wrapped);
 
     const rows: Record<string, unknown>[] = result.recordset;
     const totalCount = rows.length > 0 ? Number(rows[0]["__total_count"] ?? 0) : 0;

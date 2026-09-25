@@ -2,7 +2,7 @@ import { z } from "zod";
 import { DBAdapter } from "../../db/types";
 import { validateSQL } from "../../utils/sanitize";
 import { toRowResult } from "../../utils/row-result";
-import { normalizePagination } from "../../utils/pagination";
+import { hasExplicitPagination, normalizePagination } from "../../utils/pagination";
 import { TTLCache, getCacheTTL } from "../../utils/cache";
 import { RowResult } from "../../utils/row-result";
 
@@ -39,8 +39,11 @@ export function registerQueryTool(server: {
       validateSQL(sql);
 
       const { skip: normalizedSkip, take: normalizedTake } = normalizePagination(skip, take);
+      const useToolPagination = !hasExplicitPagination(sql);
 
-      const cacheKey = `query:${sql}:${normalizedSkip}:${normalizedTake}`;
+      const cacheKey = useToolPagination
+        ? `query:${sql}:${normalizedSkip}:${normalizedTake}`
+        : `query:${sql}:explicit-pagination`;
       const cached = queryCache.get(cacheKey);
       if (cached) {
         return {
@@ -48,8 +51,14 @@ export function registerQueryTool(server: {
         };
       }
 
-      const result = await db.query(sql, normalizedSkip, normalizedTake);
-      const rowResult = toRowResult(result, normalizedSkip, normalizedTake);
+      const result = useToolPagination
+        ? await db.query(sql, normalizedSkip, normalizedTake)
+        : await db.query(sql);
+      const rowResult = toRowResult(
+        result,
+        useToolPagination ? normalizedSkip : 0,
+        useToolPagination ? normalizedTake : result.rows.length
+      );
 
       queryCache.set(cacheKey, rowResult);
 
