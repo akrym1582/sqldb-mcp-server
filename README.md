@@ -20,10 +20,10 @@ A **read-only** [Model Context Protocol (MCP)](https://modelcontextprotocol.io/)
 
 ```bash
 # Install globally
-npm install -g @akrym1582/sqldb-mcp-server
+npm install -g sqldb-mcp-server
 
 # Or run directly with npx (no install needed)
-npx @akrym1582/sqldb-mcp-server
+npx sqldb-mcp-server
 ```
 
 ### From source
@@ -39,7 +39,7 @@ npm run build
 
 ```bash
 # 1. Install globally
-npm install -g @akrym1582/sqldb-mcp-server
+npm install -g sqldb-mcp-server
 
 # 2. Configure environment variables (see below)
 export DB_TYPE=postgresql
@@ -59,7 +59,7 @@ Or use in your MCP client configuration (e.g. Claude Desktop `claude_desktop_con
   "mcpServers": {
     "sqldb": {
       "command": "npx",
-      "args": ["-y", "@akrym1582/sqldb-mcp-server"],
+      "args": ["-y", "sqldb-mcp-server"],
       "env": {
         "DB_TYPE": "postgresql",
         "DB_HOST": "localhost",
