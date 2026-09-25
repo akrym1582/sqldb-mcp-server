@@ -1,5 +1,5 @@
 {
-  "name": "@akrym1582/sqldb-mcp-server",
+  "name": "sqldb-mcp-server",
   "version": "0.1.1",
   "description": "MCP server for SQL database access (MSSQL, PostgreSQL, MySQL)",
   "main": "dist/mcp/server.js",
