@@ -118,14 +118,15 @@ export class PostgreSQLAdapter implements DBAdapter {
     }
   }
 
-  async query(sqlText: string, skip: number, take: number): Promise<QueryResult> {
+  async query(sqlText: string, skip?: number, take?: number): Promise<QueryResult> {
     // Security note: sqlText has been validated by validateSQL() before reaching this method.
     // skip and take are integers normalised by normalizePagination() and are embedded directly
     // because pg parameterised queries do not accept LIMIT/OFFSET as bound parameters.
+    const paginationClause = skip === undefined || take === undefined ? "" : `LIMIT ${take} OFFSET ${skip}`;
     const wrapped = `
       SELECT *, COUNT(*) OVER() AS __total_count
       FROM (${sqlText}) AS __inner_query
-      LIMIT ${take} OFFSET ${skip}
+      ${paginationClause}
     `;
 
     const result = await this.withPoolSSLFallback(this.pool, this.queryTimeout, (pool) => pool.query(wrapped));

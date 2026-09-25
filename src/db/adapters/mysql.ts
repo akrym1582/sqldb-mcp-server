@@ -72,14 +72,15 @@ export class MySQLAdapter implements DBAdapter {
     });
   }
 
-  async query(sqlText: string, skip: number, take: number): Promise<QueryResult> {
+  async query(sqlText: string, skip?: number, take?: number): Promise<QueryResult> {
     // Security note: sqlText has been validated by validateSQL() before reaching this method.
     // skip and take are integers normalised by normalizePagination(); embedded directly because
     // MySQL does not accept LIMIT/OFFSET values as bound parameters.
+    const paginationClause = skip === undefined || take === undefined ? "" : `LIMIT ${take} OFFSET ${skip}`;
     const wrapped = `
       SELECT *, COUNT(*) OVER() AS __total_count
       FROM (${sqlText}) AS __inner_query
-      LIMIT ${take} OFFSET ${skip}
+      ${paginationClause}
     `;
 
     const [rows] = await this.pool.query(wrapped);
