@@ -92,7 +92,21 @@ export interface DBAdapter {
    */
   queryStream(sql: string, signal?: AbortSignal): AsyncGenerator<Record<string, unknown>>;
   listTables(): Promise<TableInfo[]>;
+  /** List databases visible to the configured database user. */
+  listDatabases(): Promise<string[]>;
   describeTable(table: string, schema?: string): Promise<TableDescription>;
   explainQuery(sql: string): Promise<ExplainResult>;
+  close(): Promise<void>;
+}
+
+export interface DatabaseInfo {
+  name: string;
+  isDefault: boolean;
+}
+
+/** Resolves an optional database name to an allow-listed adapter. */
+export interface DBProvider {
+  getAdapter(database?: string): Promise<DBAdapter>;
+  listDatabases(): Promise<DatabaseInfo[]>;
   close(): Promise<void>;
 }

@@ -25,7 +25,7 @@ export class MySQLAdapter implements DBAdapter {
   private readonly queryTimeout: number;
   private readonly exportQueryTimeout: number;
 
-  constructor() {
+  constructor(private readonly databaseName?: string) {
     this.queryTimeout = Number(process.env.DB_QUERY_TIMEOUT) || DEFAULT_QUERY_TIMEOUT;
     this.exportQueryTimeout = Number(process.env.EXPORT_QUERY_TIMEOUT) || DEFAULT_EXPORT_QUERY_TIMEOUT;
     this.pool = this.createPromisePool(this.queryTimeout);
@@ -39,12 +39,17 @@ export class MySQLAdapter implements DBAdapter {
       port: Number(process.env.DB_PORT) || 3306,
       user: process.env.DB_USER,
       password: process.env.DB_PASSWORD,
-      database: process.env.DB_NAME,
+      database: this.databaseName,
       connectTimeout: timeoutMs,
       connectionLimit: 10,
       idleTimeout: 30_000,
       ssl: useEncryption ? { rejectUnauthorized: false } : undefined,
     };
+  }
+
+  async listDatabases(): Promise<string[]> {
+    const [rows] = await this.pool.query("SHOW DATABASES");
+    return (rows as Array<Record<string, string>>).map((row) => String(Object.values(row)[0]));
   }
 
   private createPromisePool(timeoutMs: number): PromisePool {
@@ -141,7 +146,7 @@ export class MySQLAdapter implements DBAdapter {
   }
 
   async listTables(): Promise<TableInfo[]> {
-    const dbName = process.env.DB_NAME ?? "";
+    const dbName = this.databaseName ?? "";
     const [rows] = await this.pool.query(
       `SELECT TABLE_SCHEMA AS \`schema\`, TABLE_NAME AS \`name\`
        FROM information_schema.TABLES
@@ -158,7 +163,7 @@ export class MySQLAdapter implements DBAdapter {
   }
 
   async describeTable(table: string, schema?: string): Promise<TableDescription> {
-    const dbName = schema ?? process.env.DB_NAME ?? "";
+    const dbName = schema ?? this.databaseName ?? "";
 
     const dotIdx = table.indexOf(".");
     if (dotIdx !== -1) {

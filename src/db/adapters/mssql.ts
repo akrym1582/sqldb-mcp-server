@@ -11,7 +11,7 @@ export class MSSQLAdapter implements DBAdapter {
   private readonly queryTimeout: number;
   private readonly exportQueryTimeout: number;
 
-  constructor() {
+  constructor(private readonly databaseName?: string) {
     this.queryTimeout = Number(process.env.DB_QUERY_TIMEOUT) || DEFAULT_QUERY_TIMEOUT;
     this.exportQueryTimeout = Number(process.env.EXPORT_QUERY_TIMEOUT) || DEFAULT_EXPORT_QUERY_TIMEOUT;
     this.pool = this.createPool(this.queryTimeout);
@@ -23,7 +23,7 @@ export class MSSQLAdapter implements DBAdapter {
       password: process.env.DB_PASSWORD,
       server: process.env.DB_HOST!,
       port: Number(process.env.DB_PORT) || 1433,
-      database: process.env.DB_NAME,
+      database: this.databaseName,
       connectionTimeout: timeout,
       requestTimeout: timeout,
       options: {
@@ -36,6 +36,14 @@ export class MSSQLAdapter implements DBAdapter {
         idleTimeoutMillis: 30_000,
       },
     });
+  }
+
+  async listDatabases(): Promise<string[]> {
+    await this.connect();
+    const result = await this.pool.request().query(
+      "SELECT name FROM sys.databases WHERE state = 0 AND HAS_DBACCESS(name) = 1 ORDER BY name"
+    );
+    return result.recordset.map((row: { name: string }) => row.name);
   }
 
   private async getExportPool(): Promise<sql.ConnectionPool> {

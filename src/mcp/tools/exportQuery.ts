@@ -1,6 +1,6 @@
 import * as path from "path";
 import { z } from "zod";
-import { DBAdapter } from "../../db/types";
+import { DatabaseTarget, resolveDatabase } from "./database";
 import { validateSQL } from "../../utils/sanitize";
 import { writeQueryResultToFile, ExportFormat } from "../../utils/export-writer";
 
@@ -22,6 +22,7 @@ export const exportQueryInputSchema = {
       "JSON: pretty (default false). " +
       "Additional keys are accepted for forward compatibility."
     ),
+  database: z.string().min(1).optional().describe("Database to query; omit to use the default"),
 };
 
 type ExportQueryArgs = {
@@ -29,6 +30,7 @@ type ExportQueryArgs = {
   filepath: string;
   format?: "csv" | "json";
   options?: Record<string, unknown>;
+  database?: string;
 };
 
 export function registerExportQueryTool(
@@ -44,7 +46,7 @@ export function registerExportQueryTool(
       }>
     ) => void;
   },
-  db: DBAdapter
+  databases: DatabaseTarget
 ): void {
   server.registerTool(
     "exportQuery",
@@ -58,8 +60,9 @@ export function registerExportQueryTool(
         "Timeout is controlled by the EXPORT_QUERY_TIMEOUT environment variable (default: 300 s).",
       inputSchema: exportQueryInputSchema,
     },
-    async ({ sql, filepath, format = "csv", options = {} }) => {
+    async ({ sql, filepath, format = "csv", options = {}, database }) => {
       validateSQL(sql);
+      const db = await resolveDatabase(databases, database);
 
       const resolvedPath = path.isAbsolute(filepath)
         ? filepath

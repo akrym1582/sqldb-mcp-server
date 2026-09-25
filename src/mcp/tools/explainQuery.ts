@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { DBAdapter } from "../../db/types";
+import { DatabaseTarget, resolveDatabase } from "./database";
 import { validateSQL } from "../../utils/sanitize";
 import { TTLCache, getCacheTTL } from "../../utils/cache";
 
@@ -8,6 +8,7 @@ const explainCache = new TTLCache<any>(getCacheTTL());
 
 export const explainQueryInputSchema = {
   sql: z.string().min(1).describe("SELECT SQL statement whose execution plan should be retrieved"),
+  database: z.string().min(1).optional().describe("Database in which to explain the query; omit to use the default"),
 };
 
 export function registerExplainQueryTool(server: {
@@ -17,11 +18,11 @@ export function registerExplainQueryTool(server: {
       description?: string;
       inputSchema: typeof explainQueryInputSchema;
     },
-    handler: (args: { sql: string }) => Promise<{
+    handler: (args: { sql: string; database?: string }) => Promise<{
       content: Array<{ type: "text"; text: string }>;
     }>
   ) => void;
-}, db: DBAdapter): void {
+}, databases: DatabaseTarget): void {
   server.registerTool(
     "explainQuery",
     {
@@ -31,10 +32,11 @@ export function registerExplainQueryTool(server: {
         "and is returned as-is from the database driver.",
       inputSchema: explainQueryInputSchema,
     },
-    async ({ sql }) => {
+    async ({ sql, database }) => {
       validateSQL(sql);
+      const db = await resolveDatabase(databases, database);
 
-      const cacheKey = `explain:${sql}`;
+      const cacheKey = `explain:${database ?? "@default"}:${sql}`;
       const cached = explainCache.get(cacheKey);
       if (cached) {
         return { content: [{ type: "text", text: JSON.stringify(cached) }] };

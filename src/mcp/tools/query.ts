@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { DBAdapter } from "../../db/types";
+import { DatabaseTarget, resolveDatabase } from "./database";
 import { validateSQL } from "../../utils/sanitize";
 import { MAX_ROWS, toRowResult } from "../../utils/row-result";
 import { hasExplicitPagination, normalizePagination } from "../../utils/pagination";
@@ -12,6 +12,7 @@ export const queryInputSchema = {
   sql: z.string().min(1).describe("SELECT SQL statement to execute"),
   skip: z.number().int().min(0).optional().describe("Number of rows to skip (offset)"),
   take: z.number().int().min(1).max(100).optional().describe("Maximum rows to return (max 100)"),
+  database: z.string().min(1).optional().describe("Database to query; omit to use the default database"),
 };
 
 export function registerQueryTool(server: {
@@ -21,11 +22,11 @@ export function registerQueryTool(server: {
       description?: string;
       inputSchema: typeof queryInputSchema;
     },
-    handler: (args: { sql: string; skip?: number; take?: number }) => Promise<{
+    handler: (args: { sql: string; skip?: number; take?: number; database?: string }) => Promise<{
       content: Array<{ type: "text"; text: string }>;
     }>
   ) => void;
-}, db: DBAdapter): void {
+}, databases: DatabaseTarget): void {
   server.registerTool(
     "query",
     {
@@ -35,15 +36,16 @@ export function registerQueryTool(server: {
         "The meta.totalCount field shows the total number of matching rows.",
       inputSchema: queryInputSchema,
     },
-    async ({ sql, skip, take }) => {
+    async ({ sql, skip, take, database }) => {
       validateSQL(sql);
+      const db = await resolveDatabase(databases, database);
 
       const { skip: normalizedSkip, take: normalizedTake } = normalizePagination(skip, take);
       const useToolPagination = !hasExplicitPagination(sql);
 
       const cacheKey = useToolPagination
-        ? `query:${sql}:${normalizedSkip}:${normalizedTake}`
-        : `query:${sql}:explicit-pagination`;
+        ? `query:${database ?? "@default"}:${sql}:${normalizedSkip}:${normalizedTake}`
+        : `query:${database ?? "@default"}:${sql}:explicit-pagination`;
       const cached = queryCache.get(cacheKey);
       if (cached) {
         return {
