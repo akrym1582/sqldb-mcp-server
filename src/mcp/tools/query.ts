@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { DBAdapter } from "../../db/types";
 import { validateSQL } from "../../utils/sanitize";
-import { toRowResult } from "../../utils/row-result";
+import { MAX_ROWS, toRowResult } from "../../utils/row-result";
 import { hasExplicitPagination, normalizePagination } from "../../utils/pagination";
 import { TTLCache, getCacheTTL } from "../../utils/cache";
 import { RowResult } from "../../utils/row-result";
@@ -53,11 +53,11 @@ export function registerQueryTool(server: {
 
       const result = useToolPagination
         ? await db.query(sql, normalizedSkip, normalizedTake)
-        : await db.query(sql);
+        : await db.query(sql, 0, MAX_ROWS);
       const rowResult = toRowResult(
         result,
         useToolPagination ? normalizedSkip : 0,
-        useToolPagination ? normalizedTake : result.rows.length
+        useToolPagination ? normalizedTake : MAX_ROWS
       );
 
       queryCache.set(cacheKey, rowResult);

@@ -20,15 +20,20 @@ describe("query tool pagination", () => {
     return handler!;
   }
 
-  it("does not add tool pagination when SQL already has pagination", async () => {
+  it.each([
+    "SELECT * FROM users LIMIT 1",
+    "SELECT * FROM users LIMIT ALL",
+    "SELECT * FROM users OFFSET 1",
+    "SELECT * FROM users LIMIT 1000000",
+  ])("adds only an outer safety cap when SQL already has pagination: %s", async (sql) => {
     process.env.DB_TYPE = "postgresql";
     const db = {
       query: jest.fn().mockResolvedValue({ rows: [{ id: 1 }], totalCount: 1 }),
     } as unknown as DBAdapter;
 
-    await getHandler(db)({ sql: "SELECT * FROM users LIMIT 1", skip: 20, take: 30 });
+    await getHandler(db)({ sql, skip: 20, take: 30 });
 
-    expect(db.query).toHaveBeenCalledWith("SELECT * FROM users LIMIT 1");
+    expect(db.query).toHaveBeenCalledWith(sql, 0, 100);
   });
 
   it("adds normalized tool pagination when SQL has none", async () => {
